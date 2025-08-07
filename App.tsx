@@ -55,7 +55,7 @@ export default function App() {
     
     try {
       const fullPrompt = hiddenPrompt || prompt;
-      const response = await chatInstance.current.sendMessage(fullPrompt);
+      const response = await chatInstance.current.sendMessage({ message: fullPrompt });
       
       setChatHistory(prev => prev.map(msg => 
         msg.id === thinkingId ? { ...msg, content: response.text, isThinking: false } : msg
