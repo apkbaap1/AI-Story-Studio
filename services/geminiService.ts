@@ -7,7 +7,7 @@ if (!API_KEY) {
   throw new Error("API_KEY environment variable not set");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const ai = new GoogleGenAI({ apiKey: AIzaSyAdc1jiETeOvYQgT2QmmBWwjomLQ3dgU5Q });
 const textModel = "gemini-2.5-flash";
 
 export function startChat(): Chat {
