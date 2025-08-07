@@ -49,8 +49,8 @@ export default function App() {
 
     setChatHistory(prev => [
       ...prev,
-      ...(prompt ? [{ id: nanoid(), role: 'user', content: prompt }] : []),
-      { id: thinkingId, role: 'model', content: "Thinking...", isThinking: true }
+      ...(prompt ? [{ id: nanoid(), role: 'user' as const, content: prompt }] : []),
+      { id: thinkingId, role: 'model' as const, content: "Thinking...", isThinking: true }
     ]);
     
     try {
@@ -72,7 +72,7 @@ export default function App() {
   }, []);
   
   const addSystemMessage = (content: React.ReactNode) => {
-      setChatHistory(prev => [...prev, { id: nanoid(), role: 'system', content }]);
+      setChatHistory(prev => [...prev, { id: nanoid(), role: 'system' as const, content }]);
   };
   
   // --- AI ACTIONS ---
@@ -100,7 +100,7 @@ export default function App() {
      if (isAiResponding) return;
      setIsAiResponding(true);
      const thinkingId = nanoid();
-     setChatHistory(prev => [...prev, {id: thinkingId, role: 'model', content: "Continuing the story...", isThinking: true}]);
+     setChatHistory(prev => [...prev, {id: thinkingId, role: 'model' as const, content: "Continuing the story...", isThinking: true}]);
 
     try {
       const stream = await geminiService.continueWritingStream(storyContent);
