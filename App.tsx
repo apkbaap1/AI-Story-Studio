@@ -14,6 +14,44 @@ const initialChat: ChatMessage[] = [
     { id: nanoid(), role: 'system', content: 'welcome' }
 ];
 
+const ApiKeyWarning = () => (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-80 backdrop-blur-sm" aria-modal="true" role="dialog">
+        <div className="max-w-lg p-8 m-4 bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-red-500/50">
+            <div className="text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h2 className="text-2xl font-bold text-red-600 dark:text-red-500 mt-4 mb-2">Action Required: Set API Key</h2>
+                <p className="text-gray-700 dark:text-gray-300">
+                    Your Gemini API key is missing. AI features are currently disabled.
+                </p>
+            </div>
+            <div className="mt-6 text-left text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                <p className="font-semibold text-gray-800 dark:text-gray-200">To fix this in Vercel:</p>
+                <ol className="list-decimal list-inside space-y-1 pl-2">
+                    <li>Go to your Project Settings in Vercel.</li>
+                    <li>Navigate to the <strong>Environment Variables</strong> section.</li>
+                    <li>Create a new variable with:</li>
+                    <ul className="list-disc list-inside pl-6 mt-1 font-mono bg-gray-100 dark:bg-gray-900/50 p-2 rounded">
+                        <li><strong>Key:</strong> <code className="font-bold">API_KEY</code></li>
+                        <li><strong>Value:</strong> [Your Google AI Studio API Key]</li>
+                    </ul>
+                    <li>Redeploy your application.</li>
+                </ol>
+            </div>
+            <div className="mt-6 text-center">
+                 <a href="https://vercel.com/docs/projects/environment-variables" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline">
+                    Read Vercel Docs for help
+                    <svg xmlns="http://www.w3.org/2000/svg" className="inline-block h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                 </a>
+            </div>
+        </div>
+    </div>
+);
+
+
 export default function App() {
   const [theme, setTheme] = useState<Theme>('dark');
   const [isFocusMode, setFocusMode] = useState<boolean>(false);
@@ -22,19 +60,30 @@ export default function App() {
   const [isAiResponding, setIsAiResponding] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>(initialChat);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [isApiKeyMissing, setIsApiKeyMissing] = useState<boolean>(false);
   
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const pdfRef = useRef<HTMLDivElement>(null);
   const chatInstance = useRef<any>(null); // Using any for Gemini Chat object
 
   useEffect(() => {
-    // Initialize theme from localStorage or default to dark
+    // Initialize theme from localStorage
     const savedTheme = localStorage.getItem('story-studio-theme') as Theme;
     const initialTheme = savedTheme || 'dark';
     setTheme(initialTheme);
     
-    // Initialize Gemini Chat
-    chatInstance.current = geminiService.startChat();
+    // Check for API key and initialize chat
+    if (geminiService.isApiKeySet()) {
+      try {
+        chatInstance.current = geminiService.startChat();
+      } catch (error: any) {
+        console.error("Failed to initialize AI Chat:", error);
+        setChatHistory(prev => [...prev, { id: nanoid(), role: 'system', content: `Error: Could not start AI assistant. ${error.message}` }]);
+      }
+    } else {
+      setIsApiKeyMissing(true);
+      setChatHistory(prev => [...prev, { id: nanoid(), role: 'system', content: 'AI features disabled. API_KEY is not set.' }]);
+    }
   }, []);
 
   useEffect(() => {
@@ -44,32 +93,34 @@ export default function App() {
   }, [theme]);
 
   const handleSendMessage = useCallback(async (prompt: string, hiddenPrompt?: string) => {
-    setIsAiResponding(true);
-    const thinkingId = nanoid();
+    if (!isApiKeyMissing) {
+        setIsAiResponding(true);
+        const thinkingId = nanoid();
 
-    setChatHistory(prev => [
-      ...prev,
-      ...(prompt ? [{ id: nanoid(), role: 'user' as const, content: prompt }] : []),
-      { id: thinkingId, role: 'model' as const, content: "Thinking...", isThinking: true }
-    ]);
-    
-    try {
-      const fullPrompt = hiddenPrompt || prompt;
-      const response = await chatInstance.current.sendMessage({ message: fullPrompt });
-      
-      setChatHistory(prev => prev.map(msg => 
-        msg.id === thinkingId ? { ...msg, content: response.text, isThinking: false } : msg
-      ));
+        setChatHistory(prev => [
+          ...prev,
+          ...(prompt ? [{ id: nanoid(), role: 'user' as const, content: prompt }] : []),
+          { id: thinkingId, role: 'model' as const, content: "Thinking...", isThinking: true }
+        ]);
+        
+        try {
+          const fullPrompt = hiddenPrompt || prompt;
+          const response = await chatInstance.current.sendMessage({ message: fullPrompt });
+          
+          setChatHistory(prev => prev.map(msg => 
+            msg.id === thinkingId ? { ...msg, content: response.text, isThinking: false } : msg
+          ));
 
-    } catch (e: any) {
-      const errorContent = `An error occurred: ${e.message}`;
-      setChatHistory(prev => prev.map(msg => 
-        msg.id === thinkingId ? { ...msg, content: errorContent, isThinking: false } : msg
-      ));
-    } finally {
-      setIsAiResponding(false);
+        } catch (e: any) {
+          const errorContent = `An error occurred: ${e.message}`;
+          setChatHistory(prev => prev.map(msg => 
+            msg.id === thinkingId ? { ...msg, content: errorContent, isThinking: false } : msg
+          ));
+        } finally {
+          setIsAiResponding(false);
+        }
     }
-  }, []);
+  }, [isApiKeyMissing]);
   
   const addSystemMessage = (content: React.ReactNode) => {
       setChatHistory(prev => [...prev, { id: nanoid(), role: 'system' as const, content }]);
@@ -97,7 +148,7 @@ export default function App() {
   }, [selectedText, handleSendMessage]);
 
   const handleContinueWriting = useCallback(async () => {
-     if (isAiResponding) return;
+     if (isAiResponding || isApiKeyMissing) return;
      setIsAiResponding(true);
      const thinkingId = nanoid();
      setChatHistory(prev => [...prev, {id: thinkingId, role: 'model' as const, content: "Continuing the story...", isThinking: true}]);
@@ -117,7 +168,7 @@ export default function App() {
     } finally {
       setIsAiResponding(false);
     }
-  }, [storyContent, isAiResponding]);
+  }, [storyContent, isAiResponding, isApiKeyMissing]);
 
   const handleLanguageSelect = (language: string) => {
      if (!selectedText.trim()) return;
@@ -176,6 +227,7 @@ export default function App() {
 
   return (
     <>
+      {isApiKeyMissing && <ApiKeyWarning />}
       <div className={`flex h-screen font-sans text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-900 transition-all duration-300`}>
         <div 
            className={`bg-gray-100 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700/50 p-2 flex flex-col items-center transition-transform duration-500 ease-in-out ${isFocusMode ? '-translate-x-full w-0' : 'w-20'}`}
@@ -197,6 +249,7 @@ export default function App() {
             onToggleTheme={toggleTheme}
             theme={theme}
             isLoading={isAiResponding}
+            isApiConfigured={!isApiKeyMissing}
             hasSelection={!!selectedText.trim()}
             hasContent={!!storyContent.trim()}
           />
@@ -220,6 +273,7 @@ export default function App() {
           <AIAssistantPanel
             chatHistory={chatHistory}
             isAiResponding={isAiResponding}
+            isApiConfigured={!isApiKeyMissing}
             onSendMessage={handleSendMessage}
             onSuggestionClick={handleSuggestionClick}
             onLanguageSelect={handleLanguageSelect}
